@@ -9,18 +9,19 @@ module BinarySymplectic
 
 import Base: (==), (+), (-), (*), (inv), (/), (//), (^), hash, show, rand, bitstring
 
+export typerequired, SymplecticVector, vector, symplecticform, transvection, findtransvection, symplecticgrouporder, symplectic
 
 """
     typerequired(n::Integer)
 
-Compute the smallest UInt type required to represent an element of ℤ₂²ⁿ.
+Compute the smallest UInt type required to represent an element of ``ℤ₂²ⁿ``.
 
-Elements of the symplectic vector space ℤ₂²ⁿ are represented as the bits in the binary
+Elements of the symplectic vector space ``ℤ₂²ⁿ`` are represented as the bits in the binary
 expansion of an integer. This function computes the smallest unsigned integer type with
-enough bits to store an element of ℤ₂²ⁿ. If `n>64`, built-in unsigned types are too small so
-BigInt is returned.
+enough bits to store an element of ``ℤ₂²ⁿ``. If ``n>64``, built-in unsigned types are too
+small so BigInt is returned.
 
-TODO: see if larger fixed width unsigned types from BitIntegers.jl will work for n>64.
+TODO: see if larger fixed width unsigned types from BitIntegers.jl will work for ``n>64``.
 """
 function typerequired(n::Integer)
     if n ≤ 64
@@ -34,12 +35,18 @@ end
 """
     SymplecticVector{n, T}
 
-A type that stores an element of the symplectic vector space ℤ₂²ⁿ.
+A type that stores an element of the symplectic vector space ``ℤ₂²ⁿ``.
 
 The vector is stored as the bits in the binary expansion of an integer of type `T`. An
-integer `a` is mapped to ``b₁e₁+b₂f₁+b₃e₂+b₄f₂+...`` where `e₁`,`f₁`,`e₂`,`f₂`,... are the
-standard symplectic basis vectors and `b₁` is the least significant bit in the binary
-expansion of `a`, `b₂` is the second least significant bit, and so on.
+integer `a` is mapped to ``b₁e₁+b₂f₁+b₃e₂+b₄f₂+...`` where ``e₁``,``f₁``,``e₂``,``f₂``,...
+are the standard symplectic basis vectors and ``b₁`` is the least significant bit in the
+binary expansion of `a`, ``b₂`` is the second least significant bit, and so on.
+
+# Examples
+```jldoctest
+julia> a = SymplecticVector{3, UInt8}(11)
+110100
+```
 """
 struct SymplecticVector{n, T}
     vector::T
@@ -59,6 +66,12 @@ If the type `T` is not specified then the smallest unsigned type with enough bit
 the vector is used.
 
 See also [`typerequired`](@ref).
+
+# Examples
+```jldoctest
+julia> a = SymplecticVector{3}(11)
+110100
+```
 """
 @inline function SymplecticVector{n}(vector::Integer) where {n}
     T = typerequired(n)
@@ -70,10 +83,18 @@ end
 
 Returns the field `vector` of a object of type `SymplecticVector{n, T}`.
 
-The field `vector` is an integer of type `T` representing the symplectic vector v∈ℤ₂²ⁿ
+The field `vector` is an integer of type `T` representing the symplectic vector ``v∈ℤ₂²ⁿ``
 through its binary expansion.
 
 See also [`SymplecticVector{n, T}`](@ref).
+
+# Examples
+```jldoctest
+julia> a = SymplecticVector{3, UInt8}(11)
+110100
+julia> vector(a)
+0x0b
+```
 """
 function vector(v::SymplecticVector)
     return v.vector
@@ -128,8 +149,20 @@ end
 """
     symplecticform(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
 
-Compute the symplectic inner product of the symplectic vectors ``u,v∈ℤ₂²ⁿ``.  The symplectic
-form is defined as sum(u[2k-1]v[2k]+u[2k]v[2k-1] for k=1:n) with all arithmetic in ℤ₂.
+Compute the symplectic inner product of the symplectic vectors ``u,v∈ℤ₂²ⁿ``.
+
+The symplectic form is defined as `sum((u[2k-1] && v[2k]) ⊻ (u[2k] && v[2k-1]) for k=1:n)`
+(all arithmetic in ``ℤ₂``).
+
+# Examples
+```jldoctest
+julia> a = SymplecticVector{3}(11)
+110100
+julia> b = SymplecticVector{3}(17)
+100010
+julia> symplecticform(a, b)
+0x01
+```
 """
 function symplecticform(u, v) end
 
@@ -138,6 +171,16 @@ function symplecticform(u, v) end
 
 If `u`, `v` are integers rather than `SymplecticVector{n, T}` types, then an extra argument
 `n` is required to specify the dimension of the symplectic vector space ℤ₂²ⁿ.
+
+# Examples
+```jldoctest
+julia> a = 11
+11
+julia> b = 17
+17
+julia> symplecticform(3, a, b)
+1
+```
 """
 function symplecticform(n::Integer, u::T, v::T)::T where {T<:Integer}
     return reduce(⊻, ((u >>> (2*k-2)) & (v >>> (2*k-1)) & 1) ⊻ ((u >>> (2*k-1)) & (v >>> (2*k-2)) & 1) for k = 1:n)
@@ -147,6 +190,11 @@ function symplecticform(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) wh
     return symplecticform(n, u.vector, v.vector)
 end
 
+"""
+    ⋆(u, v)
+
+Alias for `symplecticform`, `u⋆v` calls `symplecticform(u, v)`.
+"""
 function ⋆(u, v)
     return symplecticform(u, v)
 end
@@ -158,9 +206,19 @@ end
 """
     transvection(h, v)
 
-Compute the symplectic transvection Zₕv:=v+[h,v]h.
+Compute the symplectic transvection ``Zₕv:=v+[h,v]h``.
 
 See also [`findtransvection`](@ref).
+
+# Examples
+```jldoctest
+julia> a = SymplecticVector{3}(11)
+110100
+julia> b = SymplecticVector{3}(17)
+010110
+julia> transvection(a, b)
+010110
+```
 """
 function transvection(h, v) end
 
@@ -345,6 +403,5 @@ function symplectic(n::Integer, i::Integer)
     T = typerequired(n)
     return SymplecticVector{n, T}.(SYMPLECTICImproved(n, i))
 end
-
 
 end  # module

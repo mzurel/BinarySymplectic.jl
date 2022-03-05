@@ -1,5 +1,5 @@
 """
-    BinarySymplectic
+    BinarySymplectic.jl
 
 Tools for working with symplectic vector spaces and symplectic groups over ℤ₂.
 
@@ -7,10 +7,17 @@ https://github.com/mzurel/BinarySymplectic.jl
 """
 module BinarySymplectic
 
-import Base: (==), (+), (-), (*), (/), (^), hash, show, rand, bitstring
+import Base: (==), (+), (-), (*), (/), (^)
+import Base: convert, promote, eltype, bitstring, show, hash, rand
 import Random: AbstractRNG, SamplerType
 
-#export SymplecticVector, vector, symplecticform, transvection, findtransvection, symplecticgrouporder, symplectic
+export SymplecticVector, SymplecticMap
+export halfdimension, dimension, data, vector, bitstring
+export symplecticform, dotproduct
+export symplecticmap, symplectictransvection
+export symplecticgrouporder
+
+include("utils.jl")
 
 """
     typerequired(n::Integer)
@@ -32,6 +39,8 @@ function typerequired(n::Integer)
 end
 # TODO: see if larger fixed width unsigned types from BitIntegers.jl will work for ``n>128``.
 
+abstract type AbstractSymplecticVector end
+
 """
     SymplecticVector{n, T}
 
@@ -49,17 +58,12 @@ julia> u = SymplecticVector{3, UInt8}(7, 4)
 101011
 ```
 """
-struct SymplecticVector{n, T}
+struct SymplecticVector{n, T} <: AbstractSymplecticVector
     a::T
     b::T
     function SymplecticVector{n, T}(a::T, b::T) where {n, T<:Integer}
         return new(a, b)
     end
-end
-
-# type casting
-function SymplecticVector{n, T}(a::T1, b::T2) where {n, T<:Integer, T1<:Integer, T2<:Integer}
-    return SymplecticVector{n, T}(convert(T, a), convert(T, b))
 end
 
 """
@@ -81,10 +85,25 @@ julia> v = SymplecticVector{3}(7, 4)
     return SymplecticVector{n, T}(a, b)
 end
 
+# type casting
+function SymplecticVector{n, T}(a::T1, b::T2) where {n, T<:Integer, T1<:Integer, T2<:Integer}
+    return SymplecticVector{n, T}(convert(T, a), convert(T, b))
+end
+
+function SymplecticVector{n, T1}(v::SymplecticVector{n, T2}) where {n, T1<:Integer, T2<:Integer}
+    return SymplecticVector{n, T1}(T1(v.a), T1(v.b))
+end
+
+convert(::Type{SymplecticVector{n, T}}, v::SymplecticVector{n, T}) where {n, T<:Integer} = v
+convert(::Type{SymplecticVector{n, T1}}, v::SymplecticVector{n, T2}) where {n, T1<:Integer, T2<:Integer} = SymplecticVector{n, T1}(v)
+promote_rule(::Type{SymplecticVector{n, T1}}, ::Type{SymplecticVector{n, T2}}) where {n, T1<:Integer, T2<:Integer} = SymplecticVector{n, promote_rule(T1, T2)}
 
 ############################################################################################
 ## Methods for extracting the data stored in a SymplecticVector{n, T} in different forms  ##
 ############################################################################################
+eltype(::Type{SymplecticVector{n, T}}) where {n, T} = T
+eltype(::SymplecticVector{n, T}) where {n, T} = T
+
 """
     halfdimension(v::SymplecticVector{n, T}) where {n, T} = n
 
@@ -136,11 +155,11 @@ julia> vector(v)
 """
 function vector(v::SymplecticVector{n, T}) where {n, T}
     vec = []
-    for k ∈ 0:(n-1)
+    for k = 0:(n-1)
         push!(vec, (v.a>>>k) & 1)
         push!(vec, (v.b>>>k) & 1)
     end
-    return NTuple{2n, T}(vec)
+    return NTuple{2n, UInt8}(vec)
 end
 
 """
@@ -162,6 +181,34 @@ function bitstring(v::SymplecticVector{n, T}) where {n, T}
     return join(Base.Iterators.flatten(zip([abits...], [bbits...])))
 end
 
+# More efficient bitstring computations for specific data types T. Interleavebits methods
+# are defined in utils.jl
+function bitstring(v::SymplecticVector{n, UInt8}) where {n}
+    return reverse(bitstring(interleavebits(v.a, v.b))[end-2n+1:end])
+end
+
+function bitstring(v::SymplecticVector{n, UInt16}) where {n}
+    return reverse(bitstring(interleavebits(v.a, v.b))[end-2n+1:end])
+end
+
+function bitstring(v::SymplecticVector{n, UInt32}) where {n}
+    return reverse(bitstring(interleavebits(v.a, v.b))[end-2n+1:end])
+end
+
+function bitstring(v::SymplecticVector{n, UInt64}) where {n}
+    return reverse(bitstring(interleavebits(v.a, v.b))[end-2n+1:end])
+end
+
+function bitstring(v::SymplecticVector{n, UInt128}) where {n}
+    a1 = UInt64(v.a & 0x0000000000000000ffffffffffffffff)
+    a2 = UInt64(v.a >> 64)
+    b1 = UInt64(v.b & 0x0000000000000000ffffffffffffffff)
+    b2 = UInt64(v.b >> 64)
+
+    bits = bitstring(interleavebits(a2, b2)) * bitstring(interleavebits(a1, b1))
+    return reverse(bits[end-2n+1:end])
+end
+
 # Overloading `bitstring` function for printing SymplecticVector{n,T} when T is BigInt
 function bitstring(x::BigInt)
     bits = ""
@@ -173,8 +220,8 @@ function bitstring(x::BigInt)
 end
 
 function bitstring(v::SymplecticVector{n, BigInt}) where {n}
-    abits = rpad(reverse(bitstring(v.a)), 2n, '0')
-    bbits = rpad(reverse(bitstring(v.b)), 2n, '0')
+    abits = rpad(reverse(bitstring(v.a)), n, '0')
+    bbits = rpad(reverse(bitstring(v.b)), n, '0')
     return join(Base.Iterators.flatten(zip([abits...], [bbits...])))
 end
 
@@ -222,6 +269,10 @@ function *(k::Integer, v::SymplecticVector{n, T}) where {n, T}
 end
 *(v::SymplecticVector{n, T}, k::Integer) where {n, T} = *(k, v)
 
+function dotproduct(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
+    return parity((u.a & v.a) ⊻ (u.b & v.b))
+end
+⋅(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T} = dotproduct(u, v)
 
 """
     symplecticform(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
@@ -242,7 +293,7 @@ julia> symplecticform(u, v)
 ```
 """
 function symplecticform(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
-    return reduce(⊻, [(((u.a>>>k) & (v.b>>>k)) ⊻ ((u.b>>>k) & (v.a>>>k)))&1 for k=0:(n-1)])
+    return parity((u.a & v.b) ⊻ (u.b & v.a))
 end
 
 """

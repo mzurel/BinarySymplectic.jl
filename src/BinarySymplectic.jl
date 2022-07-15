@@ -8,7 +8,7 @@ https://github.com/mzurel/BinarySymplectic.jl
 module BinarySymplectic
 
 import Base: (==), (+), (-), (*), (/), (^)
-import Base: convert, promote, eltype, bitstring, show, hash, rand
+import Base: convert, promote, eltype, bitstring, show, hash, rand, zero
 import Random: AbstractRNG, SamplerType
 
 export SymplecticVector, SymplecticMap
@@ -37,7 +37,7 @@ function typerequired(n::Integer)
         return BigInt
     end
 end
-# TODO: see if larger fixed width unsigned types from BitIntegers.jl will work for ``n>128``.
+# TODO: see if larger fixed width unsigned types from BitIntegers.jl will work for ``n>128``
 
 abstract type AbstractSymplecticVector end
 
@@ -98,6 +98,7 @@ convert(::Type{SymplecticVector{n, T}}, v::SymplecticVector{n, T}) where {n, T<:
 convert(::Type{SymplecticVector{n, T1}}, v::SymplecticVector{n, T2}) where {n, T1<:Integer, T2<:Integer} = SymplecticVector{n, T1}(v)
 promote_rule(::Type{SymplecticVector{n, T1}}, ::Type{SymplecticVector{n, T2}}) where {n, T1<:Integer, T2<:Integer} = SymplecticVector{n, promote_rule(T1, T2)}
 
+
 ############################################################################################
 ## Methods for extracting the data stored in a SymplecticVector{n, T} in different forms  ##
 ############################################################################################
@@ -134,7 +135,7 @@ See also [`SymplecticVector{n, T}`](@ref).
 julia> v = SymplecticVector{3, UInt8}(7, 4)
 101011
 julia> data(v)
-(7, 4)
+(0x07, 0x04)
 ```
 """
 function data(v::SymplecticVector{n, T}) where {n, T}
@@ -250,8 +251,14 @@ end
 
 
 ############################################################################################
-## Functions defining basis arithmetic operations for vectors in ℤ₂\^2n.                  ##
+## Functions defining basis arithmetic operations for vectors in ℤ₂²ⁿ.                    ##
 ############################################################################################
+zero(::Type{SymplecticVector{n, T}}) where {n, T} = SymplecticVector{n, T}(zero(T), zero(T))
+function zero(::Type{SymplecticVector{n}}) where {n}
+    T = typerequired(n)
+    return zero(SymplecticVector{n, T})
+end
+
 function +(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
     return SymplecticVector{n, T}(u.a ⊻ v.a, u.b ⊻ v.b)
 end
@@ -261,11 +268,10 @@ end
 
 ## In ℤ₂ᴺ, the only scalars are 0 and 1.
 function *(k::Integer, v::SymplecticVector{n, T}) where {n, T}
-    k &= 1
-    if k == 0
-        return SymplecticVector{n, T}(0, 0)
+    if k & 1 == 1
+        return v
     end
-    return v
+    return zero(SymplecticVector{n, T})
 end
 *(v::SymplecticVector{n, T}, k::Integer) where {n, T} = *(k, v)
 

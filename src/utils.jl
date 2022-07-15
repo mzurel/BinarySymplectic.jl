@@ -1,4 +1,4 @@
-# Bit twiddling hacks from
+# Mostly bit twiddling hacks from
 # http://www-graphics.stanford.edu/~seander/bithacks.html?fbclid=IwAR1xlKWawUWqNKpAZgWNN9-1FLPCXCnhx6f88h7_OUH4Js0wzxztwcEqpJY
 
 function parity(a::Integer)

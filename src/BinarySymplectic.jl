@@ -13,7 +13,7 @@ import Random: AbstractRNG, SamplerType
 
 export SymplecticVector, SymplecticMap
 export halfdimension, dimension, data, vector, bitstring
-export symplecticform, dotproduct
+export symplecticform, ⋆, dotproduct, ⋅
 export symplecticmap, symplectictransvection
 export symplecticgrouporder
 
@@ -38,6 +38,13 @@ function typerequired(n::Integer)
     end
 end
 # TODO: see if larger fixed width unsigned types from BitIntegers.jl will work for ``n>128``
+
+
+############################################################################################
+############################################################################################
+## Types for symplectic vectors                                                           ##
+############################################################################################
+############################################################################################
 
 abstract type AbstractSymplecticVector end
 
@@ -97,7 +104,6 @@ end
 convert(::Type{SymplecticVector{n, T}}, v::SymplecticVector{n, T}) where {n, T<:Integer} = v
 convert(::Type{SymplecticVector{n, T1}}, v::SymplecticVector{n, T2}) where {n, T1<:Integer, T2<:Integer} = SymplecticVector{n, T1}(v)
 promote_rule(::Type{SymplecticVector{n, T1}}, ::Type{SymplecticVector{n, T2}}) where {n, T1<:Integer, T2<:Integer} = SymplecticVector{n, promote_rule(T1, T2)}
-
 
 ############################################################################################
 ## Methods for extracting the data stored in a SymplecticVector{n, T} in different forms  ##
@@ -239,13 +245,22 @@ end
 
 ############################################################################################
 ## Functions for generating random symplectic vectors.                                    ##
-## TODO: can optimize here by creating a distinct algorithm for array generation.         ##
 ############################################################################################
 function rand(rng::AbstractRNG, ::SamplerType{SymplecticVector{n, T}}) where {n, T}
     return SymplecticVector{n, T}(rand(rng, 0:big(2)^n-1, 2)...)
 end
 
+function rand(rng::AbstractRNG, ::SamplerType{SymplecticVector{n, T}}, dims...) where {n, T}
+    return SymplecticVector{n, T}.(
+        rand(rng, 0:big(2)^n-1, dims...), rand(rng, 0:big(2)^n-1, dims...)
+        )
+end
+
 function rand(rng::AbstractRNG, ::SamplerType{SymplecticVector{n}}) where {n}
+    return rand(SymplecticVector{n, typerequired(n)})
+end
+
+function rand(rng::AbstractRNG, ::SamplerType{SymplecticVector{n}}, dims...) where {n}
     return rand(SymplecticVector{n, typerequired(n)})
 end
 
@@ -312,9 +327,9 @@ function ⋆(u, v)
 end
 
 
-############################
-## Symplectic group stuff ##
-############################
+############################################################################################
+## Symplectic group stuff                                                                 ##
+############################################################################################
 """
     symplecticgrouporder(n)
 

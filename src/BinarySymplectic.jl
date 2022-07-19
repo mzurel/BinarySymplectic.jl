@@ -14,7 +14,7 @@ import Random: AbstractRNG, SamplerType
 export SymplecticVector, SymplecticMap
 export halfdimension, dimension, data, vector, bitstring
 export symplecticform, ⋆, dotproduct, ⋅
-export symplecticmap, symplectictransvection
+export Transvection, transvection, findtransvection
 export symplecticgrouporder
 
 include("utils.jl")
@@ -41,9 +41,7 @@ end
 
 
 ############################################################################################
-############################################################################################
 ## Types for symplectic vectors                                                           ##
-############################################################################################
 ############################################################################################
 
 abstract type AbstractSymplecticVector end
@@ -346,6 +344,138 @@ function symplecticgrouporder(n)
         return Int128(order)
     end
     return order
+end
+
+
+############################################################################################
+## Types for symplectic maps                                                              ##
+############################################################################################
+
+abstract type AbstractSymplecticMap end
+
+############################################################################################
+## Symplectic Transvections                                                               ##
+############################################################################################
+
+"""
+    Transvection{n, T}
+
+A type that stores a symplectic transvection.
+
+This is a map of the form ``Zₕ(v)=v+(h⋆v)h`` where ``h⋆v`` is the symplectic inner product
+between ``h`` and ``v``. Internally, a transvection ``Zₕ`` of type `Transvection{n, T}`
+stores ``h`` as a symplectic vector of type `SymplecticVector{n, T}`.
+
+See also ['SymplecticVector{n, T}'](@ref).
+"""
+struct Transvection{n, T} <: AbstractSymplecticMap
+    h::SymplecticVector{n, T}
+    function Transvection{n, T}(h::SymplecticVector{n, T}) where {n, T<:Integer}
+        return new(h)
+    end
+end
+
+## Symplectic transvections get printed like their underlying symplectic vectors
+function show(io::IO, h::Transvection{n, T}) where {n, T}
+    print(io, bitstring(h.h))
+end
+
+"""
+    transvection(h, v)
+
+A map of the form ``Zₕ(v)=v+(h⋆v)h`` where ``h`` and ``v`` are symplectic vectors and
+``h⋆v`` is their symplectic inner product.
+
+If `h` is a vector then the transvections in `h` get applied sequentially.
+"""
+function transvection(h, v) end
+
+function transvection(h::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
+    if h ⋆ v == zero(T)
+        return v
+    else
+        return h + v
+    end
+end
+
+function transvection(h::Transvection{n, T}, v::SymplecticVector{n, T}) where {n, T}
+    return transvection(h.h, v)
+end
+
+function transvection(H::Vector, v::SymplecticVector{n, T}) where {n, T}
+    for h in H
+        v = transvection(h, v)
+    end
+    return v
+end
+
+function transvection(h::Transvection{n, T}, V::Vector) where {n, T}
+    return [transvection(h, v) for v in V]
+end
+
+function transvection(H::Vector, V::Vector)
+    return [transvection(H, v) for v in V]
+end
+
+*(h::Transvection{n, T}, v::SymplecticVector{n, T}) where {n, T} = transvection(h, v)
+
+
+## Random transvections
+function rand(rng::AbstractRNG, ::SamplerType{Transvection{n, T}}) where {n, T}
+    return Transvection{n, T}(rand(SymplecticVector{n, T}))
+end
+
+function rand(rng::AbstractRNG, ::SamplerType{Transvection{n, T}}, dims...) where {n, T}
+    return Transvection{n, T}.(rand(SymplecticVector{n, T}, dims...))
+end
+
+## For any u,v, there is a pair of transvections such that v=ZₛZₜu. Here we find s,t.
+"""
+    findtransvection(u::SymplecticVector{n, T}, v::SymplecticVector{n, T})
+
+Find vectors s,t∈ℤ₂²ⁿ such that v=ZₛZₜu.
+
+This procedure for finding transvections with the required properties is described in the
+proof of Lemma 2 in J. Math. Phys. 55, 122202 (2014).
+
+See also [`transvection`](@ref).
+"""
+function findtransvection(u, v) end
+
+function findtransvection(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
+    if u == v
+        return repeat([Transvection{n, T}(SymplecticVector{n, T}(zero(T), zero(T)))], 2)
+    elseif symplecticform(u, v) == one(T)
+        return [Transvection{n, T}(u+v), Transvection{n, T}(SymplecticVector{n, T}(zero(T), zero(T)))]
+    end
+    for j=0:(n-1)
+        u₁ = (u.a >>> j) & 1; u₂ = (u.b >>> j) & 1
+        v₁ = (v.a >>> j) & 1; v₂ = (v.b >>> j) & 1
+        if ((u₁ | u₂) & (v₁ | v₂)) == 1
+            for q = 0:3
+                if (u₁&q ⊻ u₂&(q>>>1)) == 1 == (v₁&q ⊻ v₂&(q>>>1))
+                    w::SymplecticVector{n, T} = u + SymplecticVector{n, T}((q>>>1)<<j, (q&1)<<j)
+                    return [Transvection{n, T}(u+w), Transvection{n, T}(v+w)]
+                end
+            end
+        end
+    end
+    for j=0:(n-1)
+        u₁ = (u.a >>> j) & 1; u₂ = (u.b >>> j) & 1
+        if (u₁ | u₂) == 1
+            for k = 0:(n-1)
+                v₁ = (v.a >>> k) & 1; v₂ = (v.b >>> k) & 1
+                if (v₁ | v₂) == 1
+                    for q = 0:15
+                        if (u₁&q ⊻ u₂&(q>>>1)) == 1 == (v₁&(q>>>2) ⊻ v₂&(q>>>3))
+                            w::SymplecticVector{n, T} = u + SymplecticVector{n, T}((((q>>>1)&1)<<j) | (((q>>>3)&1)<<k), ((q&1)<<j) | (((q>>>2)&1)<<k))
+                            return [Transvection{n, T}(u+w), Transvection{n, T}(v+w)]
+                        end
+                    end
+                end
+            end
+        end
+    end
 end
 
 end  # module

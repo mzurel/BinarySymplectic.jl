@@ -11,33 +11,14 @@ import Base: (==), (+), (-), (*), (/), (^)
 import Base: convert, promote, eltype, bitstring, show, hash, rand, zero
 import Random: AbstractRNG, SamplerType
 
-export SymplecticVector, SymplecticMap
+export AbstractSymplecticVector, SymplecticVector, SymplecticMap
 export halfdimension, dimension, data, vector, bitstring
 export symplecticform, ⋆, dotproduct, ⋅
+export symplecticgramschmidt
 export Transvection, transvection, findtransvection
 export symplecticgrouporder
 
 include("utils.jl")
-
-"""
-    typerequired(n::Integer)
-
-Compute the smallest UInt type required to represent an element of ``ℤ₂²ⁿ``.
-
-Elements of the symplectic vector space ``ℤ₂ⁿ×ℤ₂ⁿ`` are represented as the bits in the
-binary expansions of a pair of integers. This function computes the smallest unsigned
-integer type with enough bits to store an element of ``ℤ₂ⁿ``. If ``n>128``, built-in
-unsigned types are too small so BigInt is returned.
-"""
-function typerequired(n::Integer)
-    if n ≤ 128
-        bitsrequired = max(8, convert(Integer, 2^ceil(log2(n))))
-        return eval(Meta.parse("UInt"*string(bitsrequired)))
-    else
-        return BigInt
-    end
-end
-# TODO: see if larger fixed width unsigned types from BitIntegers.jl will work for ``n>128``
 
 
 ############################################################################################
@@ -72,6 +53,26 @@ struct SymplecticVector{n, T} <: AbstractSymplecticVector
 end
 
 """
+    typerequired(n::Integer)
+
+Compute the smallest UInt type required to represent an element of ``ℤ₂²ⁿ``.
+
+Elements of the symplectic vector space ``ℤ₂ⁿ×ℤ₂ⁿ`` are represented as the bits in the
+binary expansions of a pair of integers. This function computes the smallest unsigned
+integer type with enough bits to store an element of ``ℤ₂ⁿ``. If ``n>128``, built-in
+unsigned types are too small so BigInt is returned.
+"""
+function typerequired(n::Integer)
+    if n ≤ 128
+        bitsrequired = max(8, convert(Integer, 2^ceil(log2(n))))
+        return eval(Meta.parse("UInt"*string(bitsrequired)))
+    else
+        return BigInt
+    end
+end
+# TODO: see if larger fixed width unsigned types from BitIntegers.jl will work for ``n>128``
+
+"""
     SymplecticVector{n}
 
 If the type `T` is not specified then the smallest unsigned type with enough bits to store
@@ -103,9 +104,11 @@ convert(::Type{SymplecticVector{n, T}}, v::SymplecticVector{n, T}) where {n, T<:
 convert(::Type{SymplecticVector{n, T1}}, v::SymplecticVector{n, T2}) where {n, T1<:Integer, T2<:Integer} = SymplecticVector{n, T1}(v)
 promote_rule(::Type{SymplecticVector{n, T1}}, ::Type{SymplecticVector{n, T2}}) where {n, T1<:Integer, T2<:Integer} = SymplecticVector{n, promote_rule(T1, T2)}
 
+
 ############################################################################################
 ## Methods for extracting the data stored in a SymplecticVector{n, T} in different forms  ##
 ############################################################################################
+
 eltype(::Type{SymplecticVector{n, T}}) where {n, T} = T
 eltype(::SymplecticVector{n, T}) where {n, T} = T
 
@@ -236,6 +239,7 @@ end
 ## Although internally vectors are stored as integers, it's more convenient to output the ##
 ## bits in the binary expansion (i.e. the vector itself) rather than the integer.         ##
 ############################################################################################
+
 function show(io::IO, v::SymplecticVector{n, T}) where {n, T}
     print(io, bitstring(v))
 end
@@ -244,6 +248,7 @@ end
 ############################################################################################
 ## Functions for generating random symplectic vectors.                                    ##
 ############################################################################################
+
 function rand(rng::AbstractRNG, ::SamplerType{SymplecticVector{n, T}}) where {n, T}
     return SymplecticVector{n, T}(rand(rng, 0:big(2)^n-1, 2)...)
 end
@@ -255,18 +260,22 @@ function rand(rng::AbstractRNG, ::SamplerType{SymplecticVector{n, T}}, dims...) 
 end
 
 function rand(rng::AbstractRNG, ::SamplerType{SymplecticVector{n}}) where {n}
-    return rand(SymplecticVector{n, typerequired(n)})
+    T = typerequired(n)
+    return rand(SymplecticVector{n, T})
 end
 
 function rand(rng::AbstractRNG, ::SamplerType{SymplecticVector{n}}, dims...) where {n}
-    return rand(SymplecticVector{n, typerequired(n)})
+    T = typerequired(n)
+    return rand(SymplecticVector{n, T}, dims...)
 end
 
 
 ############################################################################################
 ## Functions defining basis arithmetic operations for vectors in ℤ₂²ⁿ.                    ##
 ############################################################################################
+
 zero(::Type{SymplecticVector{n, T}}) where {n, T} = SymplecticVector{n, T}(zero(T), zero(T))
+
 function zero(::Type{SymplecticVector{n}}) where {n}
     T = typerequired(n)
     return zero(SymplecticVector{n, T})
@@ -286,11 +295,13 @@ function *(k::Integer, v::SymplecticVector{n, T}) where {n, T}
     end
     return zero(SymplecticVector{n, T})
 end
+
 *(v::SymplecticVector{n, T}, k::Integer) where {n, T} = *(k, v)
 
 function dotproduct(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
     return parity((u.a & v.a) ⊻ (u.b & v.b))
 end
+
 ⋅(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T} = dotproduct(u, v)
 
 """
@@ -328,6 +339,7 @@ end
 ############################################################################################
 ## Symplectic group stuff                                                                 ##
 ############################################################################################
+
 """
     symplecticgrouporder(n)
 
@@ -348,10 +360,47 @@ end
 
 
 ############################################################################################
+## The symplectic Gram-Schmidt procedure                                                  ##
+############################################################################################
+
+"""
+    symplecticgramschmidt(Ω::Vector{SymplecticVector{n, T}})
+
+For as set of vectors ``Ω``, return a symplectic basis for ``span(Ω \\ (Ω ∩ Ω^⟂))``.
+"""
+function symplecticgramschmidt(Ω::Vector{T}) where {n, T<:AbstractSymplecticVector}
+    basis::Vector{T} = []
+    while length(Ω) ≠ 0
+        symplecticpairflag = false
+        u = Ω[1]
+        for k = 2:length(Ω)
+            v = Ω[k]
+            if u ⋆ v == 1
+                symplecticpairflag = true
+                push!(basis, u)
+                push!(basis, v)
+                Ω = vcat(Ω[2:k-1], Ω[k+1:end])
+                for k = 1:length(Ω)
+                    w = Ω[k]
+                    Ω[k] = w + ((v ⋆ w) * u) + ((u ⋆ w) * v)
+                end
+                break
+            end
+        end
+        if !(symplecticpairflag)
+            Ω = Ω[2:end]
+        end
+    end
+    return basis
+end
+
+
+############################################################################################
 ## Types for symplectic maps                                                              ##
 ############################################################################################
 
 abstract type AbstractSymplecticMap end
+
 
 ############################################################################################
 ## Symplectic Transvections                                                               ##
@@ -373,6 +422,14 @@ struct Transvection{n, T} <: AbstractSymplecticMap
     function Transvection{n, T}(h::SymplecticVector{n, T}) where {n, T<:Integer}
         return new(h)
     end
+end
+
+function Transvection{n}(h::SymplecticVector{n, T}) where {n, T<:Integer}
+    return Transvection{n, T}(h)
+end
+
+function Transvection(h::SymplecticVector{n, T}) where {n, T<:Integer}
+    return Transvection{n, T}(h)
 end
 
 ## Symplectic transvections get printed like their underlying symplectic vectors
@@ -429,19 +486,27 @@ function rand(rng::AbstractRNG, ::SamplerType{Transvection{n, T}}, dims...) wher
     return Transvection{n, T}.(rand(SymplecticVector{n, T}, dims...))
 end
 
-## For any u,v, there is a pair of transvections such that v=ZₛZₜu. Here we find s,t.
+function rand(rng::AbstractRNG, ::SamplerType{Transvection{n}}) where {n}
+    T = typerequired(n)
+    return rand(Transvection{n, T})
+end
+
+function rand(rng::AbstractRNG, ::SamplerType{Transvection{n}}, dims...) where {n}
+    T = typerequired(n)
+    return rand(Transvection{n, T}, dims...)
+end
+
 """
     findtransvection(u::SymplecticVector{n, T}, v::SymplecticVector{n, T})
 
-Find vectors s,t∈ℤ₂²ⁿ such that v=ZₛZₜu.
+Find vectors ``s,t∈ℤ₂²ⁿ`` such that ``v=ZₛZₜu``.
 
-This procedure for finding transvections with the required properties is described in the
-proof of Lemma 2 in J. Math. Phys. 55, 122202 (2014).
+Returns a vector `[s, t]` where `s` and `t` are of type `Transvection{n, T}`. This procedure
+for finding transvections with the required properties is described in the proof of Lemma 2
+in J. Math. Phys. 55, 122202 (2014). If ``u⋆v=1`` then ``t=0``, if ``u=v`` then ``s=0=t``.
 
-See also [`transvection`](@ref).
+See also [`Transvection{n, T}`](@ref).
 """
-function findtransvection(u, v) end
-
 function findtransvection(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
     if u == v
         return repeat([Transvection{n, T}(SymplecticVector{n, T}(zero(T), zero(T)))], 2)

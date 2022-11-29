@@ -619,4 +619,39 @@ function findtransvection(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) 
     end
 end
 
+
+############################################################################################
+## Subspaces                                                                              ##
+############################################################################################
+
+struct Subspace{n, dim, T}
+    basis::NTuple{dim, SymplecticVector{n, T}}
+    function Subspace{n, dim, T}(b::NTuple{dim, SymplecticVector{n, T}}) where {n, dim, T<:Integer}
+        return new(b)
+    end
+end
+
+function dimension(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
+    return dim
+end
+
+function isisotropic(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
+    for i = 1:dim
+        for j = 1:dim
+            if !iszero(S.basis[i] ⋆ S.basis[j])
+                return false
+            end
+        end
+    end
+    return true
+end
+
+function isLangrangian(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
+    if dim == n && isisotropic(S)
+        return true
+    else
+        return false
+    end
+end
+
 end  # module

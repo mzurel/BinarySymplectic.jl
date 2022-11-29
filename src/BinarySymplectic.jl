@@ -13,7 +13,7 @@ import Random: AbstractRNG, SamplerType
 
 export AbstractSymplecticVector, SymplecticVector, SymplecticMap, Transvection, Subspace
 export halfdimension, dimension, data, vector, bitstring, iszero, isequal, isless,
-    symplecticform, (⋆), dotproduct, (⋅), symplecticgramschmidt, transvection,
+    symplecticform, (⋆), dotproduct, (⋅), lift, symplecticgramschmidt, transvection,
     findtransvection, symplecticgrouporder, isisotropic, isLagrangian
 
 include("utils.jl")
@@ -354,8 +354,8 @@ function lift(u::SymplecticVector{n, T1}, m::Integer, T2) where {n, T1<:Integer}
 end
 
 function lift(u::SymplecticVector{n, T}, m::Integer) where {n, T<:Integer}
-    T = typerequired(n+m)
-    return SymplecticVector{n+m, T}(data(u)...)
+    T2 = typerequired(n+m)
+    return SymplecticVector{n+m, T2}(data(u)...)
 end
 
 

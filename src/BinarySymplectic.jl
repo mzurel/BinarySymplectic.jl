@@ -7,16 +7,14 @@ https://github.com/mzurel/BinarySymplectic.jl
 """
 module BinarySymplectic
 
-import Base: (==), (+), (-), (*), (/), (^)
-import Base: convert, promote, eltype, bitstring, show, hash, rand, zero
+import Base: (==), (+), (-), (*), (/), (^), (<), (>), (≤), (≥), bitstring, convert, eltype,
+    hash, isequal, isless, iszero, promote, show, rand, zero
 import Random: AbstractRNG, SamplerType
 
-export AbstractSymplecticVector, SymplecticVector, SymplecticMap
-export halfdimension, dimension, data, vector, bitstring
-export symplecticform, ⋆, dotproduct, ⋅
-export symplecticgramschmidt
-export Transvection, transvection, findtransvection
-export symplecticgrouporder
+export AbstractSymplecticVector, SymplecticVector, SymplecticMap, Transvection, Subspace
+export halfdimension, dimension, data, vector, bitstring, iszero, isequal, isless,
+    symplecticform, (⋆), dotproduct, (⋅), symplecticgramschmidt, transvection,
+    findtransvection, symplecticgrouporder, isisotropic, isLagrangian
 
 include("utils.jl")
 
@@ -281,6 +279,14 @@ function zero(::Type{SymplecticVector{n}}) where {n}
     return zero(SymplecticVector{n, T})
 end
 
+function iszero(u::SymplecticVector{n, T}) where {n, T}
+    if iszero(u.a) && iszero(u.b)
+        return true
+    else
+        return false
+    end
+end
+
 function +(u::SymplecticVector{n, T}, v::SymplecticVector{n, T}) where {n, T}
     return SymplecticVector{n, T}(u.a ⊻ v.a, u.b ⊻ v.b)
 end
@@ -335,6 +341,62 @@ function ⋆(u, v)
     return symplecticform(u, v)
 end
 
+"""
+    lift(u::SymplecticVector{n, T1}, m::Integer, T2) where {n, T1<:Integer}
+
+Given an element u∈ℤ₂²ⁿ, return u⊕0∈ℤ₂²⁽ⁿ⁺ᵐ⁾.
+
+The input is a `SymplecticVector{n, T1}` for some type `T1`, the output has type
+`SymplectiCVector{n+m, T2}`.
+"""
+function lift(u::SymplecticVector{n, T1}, m::Integer, T2) where {n, T1<:Integer}
+    return SymplecticVector{n+m, T2}(data(u)...)
+end
+
+function lift(u::SymplecticVector{n, T}, m::Integer) where {n, T<:Integer}
+    T = typerequired(n+m)
+    return SymplecticVector{n+m, T}(data(u)...)
+end
+
+
+############################################################################################
+## Comparison operators                                                                   ##
+############################################################################################
+
+function hash(u::SymplecticVector{n, T}) where {n, T<:Integer}
+    return hash(data(u))
+end
+
+"""
+    isequal(u, v)
+
+Check if two symplectic vectors are equal (regardless of type parameters). E.g. 01 == 0100.
+"""
+function isequal(u::SymplecticVector{n1, T1}, v::SymplecticVector{n2, T2}) where {n1, n2, T1<:Integer, T2<:Integer}
+    if isequal(u.a, v.a) && isequal(u.b, v.b)
+        return true
+    else
+        return false
+    end
+end
+
+==(u::SymplecticVector{n1, T1}, v::SymplecticVector{n2, T2}) where {n1, n2, T1<:Integer, T2<:Integer} = isequal(u, v)
+
+"""
+    isless(u, v)
+
+Defines a partial order on the set of Symplectic vectors.
+
+00,10,01,11,0010,1010,0110,1110,0001,1001,0101,1101,0011,1011,0111,1111,000010,100010
+"""
+function isless(u::SymplecticVector{n1, T1}, v::SymplecticVector{n2, T2}) where {n1, n2, T1<:Integer, T2<:Integer}
+    if interleavebits(u.a, u.b) < interleavebits(v.a, v.b)
+        return true
+    else
+        return false
+    end
+end
+
 
 ############################################################################################
 ## Symplectic group stuff                                                                 ##
@@ -368,7 +430,7 @@ end
 
 For as set of vectors ``Ω``, return a symplectic basis for ``span(Ω \\ (Ω ∩ Ω^⟂))``.
 """
-function symplecticgramschmidt(Ω::Vector{T}) where {n, T<:AbstractSymplecticVector}
+function symplecticgramschmidt(Ω::Vector{T}) where {T<:AbstractSymplecticVector}
     basis::Vector{T} = []
     while length(Ω) ≠ 0
         symplecticpairflag = false
@@ -440,10 +502,24 @@ end
 """
     transvection(h, v)
 
-A map of the form ``Zₕ(v)=v+(h⋆v)h`` where ``h`` and ``v`` are symplectic vectors and
-``h⋆v`` is their symplectic inner product.
+Compute the symplectic transvection ``Zₕv:=v+[h,v]h.
 
-If `h` is a vector then the transvections in `h` get applied sequentially.
+If `h` is a vector then the transvections in `h` get applied sequentially. If
+`v` is a vector then the transvection(s) gets applied to `v` element-wise.
+
+See also [`findtransvection`](@ref).
+
+# Examples
+```jldoctest
+julia> a = SymplecticVector{3}(11)
+110100
+julia> b = SymplecticVector{3}(17)
+010110
+julia> h = Transvection{3}(a)
+110100
+julia> transvection(h, b)
+100010
+```
 """
 function transvection(h, v) end
 

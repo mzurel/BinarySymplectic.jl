@@ -114,7 +114,29 @@ function interleavebits(a::UInt64, b::UInt64)
     b = (b | (b <<  2)) & 0x33333333333333333333333333333333
     b = (b | (b <<  1)) & 0x55555555555555555555555555555555
 
-    a | (b << 1)
+    return a | (b << 1)
+end
+
+function interleavebits(a::UInt128, b::UInt128)
+    a = BigInt(a); b = BigInt(b)
+
+    a = (a | (a << 64)) & ((BigInt(0x0000000000000000ffffffffffffffff) << 128) | (0x0000000000000000ffffffffffffffff))
+    a = (a | (a << 32)) & ((BigInt(0x00000000ffffffff00000000ffffffff) << 128) | (0x00000000ffffffff00000000ffffffff))
+    a = (a | (a << 16)) & ((BigInt(0x0000ffff0000ffff0000ffff0000ffff) << 128) | (0x0000ffff0000ffff0000ffff0000ffff))
+    a = (a | (a <<  8)) & ((BigInt(0x00ff00ff00ff00ff00ff00ff00ff00ff) << 128) | (0x00ff00ff00ff00ff00ff00ff00ff00ff))
+    a = (a | (a <<  4)) & ((BigInt(0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f) << 128) | (0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f))
+    a = (a | (a <<  2)) & ((BigInt(0x33333333333333333333333333333333) << 128) | (0x33333333333333333333333333333333))
+    a = (a | (a <<  1)) & ((BigInt(0x55555555555555555555555555555555) << 128) | (0x55555555555555555555555555555555))
+
+    b = (b | (b << 64)) & ((BigInt(0x0000000000000000ffffffffffffffff) << 128) | (0x0000000000000000ffffffffffffffff))
+    b = (b | (b << 32)) & ((BigInt(0x00000000ffffffff00000000ffffffff) << 128) | (0x00000000ffffffff00000000ffffffff))
+    b = (b | (b << 16)) & ((BigInt(0x0000ffff0000ffff0000ffff0000ffff) << 128) | (0x0000ffff0000ffff0000ffff0000ffff))
+    b = (b | (b <<  8)) & ((BigInt(0x00ff00ff00ff00ff00ff00ff00ff00ff) << 128) | (0x00ff00ff00ff00ff00ff00ff00ff00ff))
+    b = (b | (b <<  4)) & ((BigInt(0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f) << 128) | (0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f))
+    b = (b | (b <<  2)) & ((BigInt(0x33333333333333333333333333333333) << 128) | (0x33333333333333333333333333333333))
+    b = (b | (b <<  1)) & ((BigInt(0x55555555555555555555555555555555) << 128) | (0x55555555555555555555555555555555))
+
+    return a | (b << 1)
 end
 
 function deinterleavebits(c::UInt8)

@@ -117,6 +117,86 @@ function interleavebits(a::UInt64, b::UInt64)
     a | (b << 1)
 end
 
+function deinterleavebits(c::UInt8)
+    a = c & 0x55; b = (c & 0xaa) >> 1;
+
+    a = (a | (a >> 1)) & 0x33
+    a = (a | (a >> 2)) & 0x0f
+
+    b = (b | (b >> 1)) & 0x33
+    b = (b | (b >> 2)) & 0x0f
+
+    return (a, b)
+end
+
+function deinterleavebits(c::UInt16)
+    a = c & 0x5555; b = (c & 0xaaaa) >> 1;
+
+    a = (a | (a >> 1)) & 0x3333
+    a = (a | (a >> 2)) & 0x0f0f
+    a = (a | (a >> 4)) & 0x00ff
+
+    b = (b | (b >> 1)) & 0x3333
+    b = (b | (b >> 2)) & 0x0f0f
+    b = (b | (b >> 4)) & 0x00ff
+
+    return (UInt8(a), UInt8(b))
+end
+
+function deinterleavebits(c::UInt32)
+    a = c & 0x55555555; b = (c & 0xaaaaaaaa) >> 1;
+
+    a = (a | (a >> 1)) & 0x33333333
+    a = (a | (a >> 2)) & 0x0f0f0f0f
+    a = (a | (a >> 4)) & 0x00ff00ff
+    a = (a | (a >> 8)) & 0x0000ffff
+
+    b = (b | (b >> 1)) & 0x33333333
+    b = (b | (b >> 2)) & 0x0f0f0f0f
+    b = (b | (b >> 4)) & 0x00ff00ff
+    b = (b | (b >> 8)) & 0x0000ffff
+
+    return (UInt16(a), UInt16(b))
+end
+
+function deinterleavebits(c::UInt64)
+    a = c & 0x5555555555555555; b = (c & 0xaaaaaaaaaaaaaaaa) >> 1;
+
+    a = (a | (a >>  1)) & 0x3333333333333333
+    a = (a | (a >>  2)) & 0x0f0f0f0f0f0f0f0f
+    a = (a | (a >>  4)) & 0x00ff00ff00ff00ff
+    a = (a | (a >>  8)) & 0x0000ffff0000ffff
+    a = (a | (a >> 16)) & 0x00000000ffffffff
+
+    b = (b | (b >>  1)) & 0x3333333333333333
+    b = (b | (b >>  2)) & 0x0f0f0f0f0f0f0f0f
+    b = (b | (b >>  4)) & 0x00ff00ff00ff00ff
+    b = (b | (b >>  8)) & 0x0000ffff0000ffff
+    b = (b | (b >> 16)) & 0x00000000ffffffff
+
+    return (UInt32(a), UInt32(b))
+end
+
+function deinterleavebits(c::UInt128)
+    a = c & 0x55555555555555555555555555555555; b = (c & 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa) >> 1;
+
+    a = (a | (a >>  1)) & 0x33333333333333333333333333333333
+    a = (a | (a >>  2)) & 0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f
+    a = (a | (a >>  4)) & 0x00ff00ff00ff00ff00ff00ff00ff00ff
+    a = (a | (a >>  8)) & 0x0000ffff0000ffff0000ffff0000ffff
+    a = (a | (a >> 16)) & 0x00000000ffffffff00000000ffffffff
+    a = (a | (a >> 32)) & 0x0000000000000000ffffffffffffffff
+
+    b = (b | (b >>  1)) & 0x33333333333333333333333333333333
+    b = (b | (b >>  2)) & 0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f
+    b = (b | (b >>  4)) & 0x00ff00ff00ff00ff00ff00ff00ff00ff
+    b = (b | (b >>  8)) & 0x0000ffff0000ffff0000ffff0000ffff
+    b = (b | (b >> 16)) & 0x00000000ffffffff00000000ffffffff
+    b = (b | (b >> 32)) & 0x0000000000000000ffffffffffffffff
+
+    return (UInt64(a), UInt64(b))
+end
+
 function reversebits(a::UInt8)
     a = ((a >> 1) & 0x55) | ((a & 0x55) << 1)
     a = ((a >> 2) & 0x33) | ((a & 0x33) << 2)

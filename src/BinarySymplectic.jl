@@ -371,6 +371,19 @@ end
     isequal(u, v)
 
 Check if two symplectic vectors are equal (regardless of type parameters). E.g. 01 == 0100.
+
+# Examples
+```jldoctest
+julia> u = SymplecticVector{3, UInt8}(7, 4)
+101011
+julia> v = SymplecticVector{3, UInt8}(5, 6)
+100111
+julia> isequal(u, v)
+false
+julia> v = SymplecticVector{9, UInt16}(7, 4)
+101011000000000000
+julia> isequal(u, v)
+true
 """
 function isequal(u::SymplecticVector{n1, T1}, v::SymplecticVector{n2, T2}) where {n1, n2, T1<:Integer, T2<:Integer}
     if isequal(u.a, v.a) && isequal(u.b, v.b)

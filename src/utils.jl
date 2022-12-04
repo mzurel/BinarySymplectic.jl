@@ -49,6 +49,17 @@ function parity(a::UInt128)
     return (0x6996 >> a) & 0x1
 end
 
+function parity(a::BigInt)
+    k = 0
+    
+    while a ≠ 0
+        k ⊻= a & 1
+        k >> 1
+    end
+
+    return k
+end
+
 function interleavebits(a::UInt8, b::UInt8)
     a = UInt16(a); b = UInt16(b);
 
@@ -139,6 +150,22 @@ function interleavebits(a::UInt128, b::UInt128)
     return a | (b << 1)
 end
 
+function interleavebits(a::BigInt, b::BigInt)
+    c = zero(BigInt)
+    k = 0
+
+    while (a ≠ 0) || (b ≠ 0)
+        c |= (a & 1) << (2k)
+        c |= (b & 1) << (2k+1)
+
+        a >>= 1
+        b >>= 1
+        k += 1
+    end
+    
+    return c
+end
+
 function deinterleavebits(c::UInt8)
     a = c & 0x55; b = (c & 0xaa) >> 1;
 
@@ -219,6 +246,22 @@ function deinterleavebits(c::UInt128)
     return (UInt64(a), UInt64(b))
 end
 
+function deinterleavebits(c::BigInt)
+    a = zero(BigInt); b = zero(BigInt)
+    k = 0
+
+    while c ≠ 0
+        a |= (c & 1) << k
+        c >>= 1
+        b |= (c & 1) << k
+        c >>= 1
+
+        k += 1
+    end
+    
+    return (a, b)
+end
+
 function reversebits(a::UInt8)
     a = ((a >> 1) & 0x55) | ((a & 0x55) << 1)
     a = ((a >> 2) & 0x33) | ((a & 0x33) << 2)
@@ -262,4 +305,15 @@ function reversebits(a::UInt128)
     a = ((a >> 32) & 0x00000000ffffffff00000000ffffffff) | ((a & 0x00000000ffffffff00000000ffffffff) << 32)
     a = ((a >> 64)                                     ) | ((a                                     ) << 64)
     return a
+end
+
+function reversebits(a::BigInt)
+    maxbit = Integer(floor(log2(a)))
+    b = zero(BigInt)
+
+    for n=0:maxbit
+        b |= ((a >> n) & 1) << (maxbit - n)
+    end
+
+    return b
 end

@@ -14,7 +14,7 @@ import Random: AbstractRNG, SamplerType
 export AbstractSymplecticVector, SymplecticVector, SymplecticMap, Transvection, Subspace
 export halfdimension, dimension, data, vector, bitstring, iszero, isequal, isless,
     symplecticform, (⋆), dotproduct, (⋅), lift, symplecticgramschmidt, transvection,
-    findtransvection, symplecticgrouporder, isisotropic, isLagrangian
+    findtransvection, symplecticgrouporder, isisotropic, isLagrangian, SYMPLECTICImproved
 
 include("utils.jl")
 
@@ -358,7 +358,6 @@ function lift(u::SymplecticVector{n, T}, m::Integer) where {n, T<:Integer}
     return SymplecticVector{n+m, T2}(data(u)...)
 end
 
-
 ############################################################################################
 ## Comparison operators                                                                   ##
 ############################################################################################
@@ -664,6 +663,45 @@ function isLangrangian(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
         return true
     else
         return false
+    end
+end
+
+"""
+    SYMPLECTICImproved(n, i)
+
+The SYMPLECTICImproved algorithm from J. Math. Phys. 55, 122202 (2014).
+"""
+function SYMPLECTICImproved(n, i)
+    type = typerequired(n)
+    s = big(1) << 2n - 1
+    k = i % s + 1
+
+    f₁ = SymplecticVector{n, type}(deinterleavebits(k)...)
+    
+    T = findtransvection(SymplecticVector{n, type}(one(type),zero(type)), f₁)
+
+    b = swapbits(BigInt(floor(i / s)) << 1, 0, 1) & (1 << 2n - 1)
+
+    e = SymplecticVector{n, type}(reverse(deinterleavebits(b))...)
+    h₀ = transvection(T, e)
+
+    if b & 1 == 1
+        T¹ = [Transvection{n}(h₀)]
+    else
+        T¹ = [Transvection{n}(h₀), Transvection{n}(f₁)]
+    end
+    f₂ = transvection([T, T¹...], SymplecticVector{n, type}(zero(type),one(type)))
+
+    if n == 1
+        return [f₁, f₂]
+    else
+        return transvection([T, T¹...],
+                [
+                    [lift(u, 1) for u in SYMPLECTICImproved(n-1, BigInt(floor(i / s)) >> (2n-1))]...,
+                    SymplecticVector{n, type}(one(type) << (n-1), 0),
+                    SymplecticVector{n, type}(0, one(type) << (n-1))
+                ]
+            )
     end
 end
 

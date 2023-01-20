@@ -317,3 +317,9 @@ function reversebits(a::BigInt)
 
     return b
 end
+
+function swapbits(a, i, j)
+    x = ((a >> i) ⊻ (a >> j)) & ((one(a) << 1) - one(a))
+    r = a ⊻ ((x << i) | (x << j));
+    return r
+end

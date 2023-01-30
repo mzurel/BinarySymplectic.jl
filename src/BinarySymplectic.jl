@@ -680,7 +680,7 @@ function SYMPLECTICImproved(n, i)
     
     T = findtransvection(SymplecticVector{n, type}(one(type),zero(type)), f₁)
 
-    b = swapbits(BigInt(floor(i / s)) << 1, 0, 1) & (1 << 2n - 1)
+    b = swapbits(BigInt(floor(i / s)) << 1, 0, 1) & (big(1) << 2n - 1)
 
     e = SymplecticVector{n, type}(reverse(deinterleavebits(b))...)
     h₀ = transvection(T, e)

@@ -11,9 +11,9 @@ import Base: (==), (+), (-), (*), (/), (^), (<), (>), (≤), (≥), bitstring, c
     hash, isequal, isless, iszero, promote, show, rand, zero
 import Random: AbstractRNG, SamplerType
 
-export AbstractSymplecticVector, SymplecticVector, SymplecticMap, Transvection, Subspace
-export halfdimension, dimension, data, vector, bitstring, iszero, isequal, isless,
-    symplecticform, (⋆), dotproduct, (⋅), lift, symplecticgramschmidt, transvection,
+export AbstractSymplecticVector, SymplecticVector, AbstractSymplecticMap, SymplecticBasis, SymplecticMap, Transvection, Subspace
+export typerequired, halfdimension, dimension, data, vector, bitstring, iszero, isequal, isless,
+    symplecticform, (⋆), dotproduct, (⋅), lift, liftright, issymplectic, symplecticgramschmidt, transvection,
     findtransvection, symplecticgrouporder, isisotropic, isLagrangian, SYMPLECTICImproved
 
 include("utils.jl")
@@ -46,6 +46,7 @@ struct SymplecticVector{n, T} <: AbstractSymplecticVector
     a::T
     b::T
     function SymplecticVector{n, T}(a::T, b::T) where {n, T<:Integer}
+        @assert (a >>> n == 0) && (b >>> n == 0)
         return new(a, b)
     end
 end
@@ -358,6 +359,16 @@ function lift(u::SymplecticVector{n, T}, m::Integer) where {n, T<:Integer}
     return SymplecticVector{n+m, T2}(data(u)...)
 end
 
+function liftright(u::SymplecticVector{n, T1}, m::Integer, T2) where {n, T1<:Integer}
+    return SymplecticVector{n+m, T2}(T2(u.a) << 1, T2(u.b) << 1)
+end
+
+function liftright(u::SymplecticVector{n, T}, m::Integer) where {n, T<:Integer}
+    T2 = typerequired(n+m)
+    return SymplecticVector{n+m, T2}(T2(u.a) << 1, T2(u.b) << 1)
+end
+
+
 ############################################################################################
 ## Comparison operators                                                                   ##
 ############################################################################################
@@ -411,25 +422,37 @@ end
 
 
 ############################################################################################
-## Symplectic group stuff                                                                 ##
+## Subspaces                                                                              ##
 ############################################################################################
 
-"""
-    symplecticgrouporder(n)
+struct Subspace{n, dim, T}
+    basis::NTuple{dim, SymplecticVector{n, T}}
+    function Subspace{n, dim, T}(b::NTuple{dim, SymplecticVector{n, T}}) where {n, dim, T<:Integer}
+        return new(b)
+    end
+end
 
-Compute the order of the symplectic group ``Sp(2n,ℤ₂)``.
-"""
-function symplecticgrouporder(n)
-    order = BigInt(2)^(n^2)
-    for k in 1:n
-        order *= BigInt(4)^k - 1
+function dimension(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
+    return dim
+end
+
+function isisotropic(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
+    for i = 1:dim
+        for j = 1:dim
+            if !iszero(S.basis[i] ⋆ S.basis[j])
+                return false
+            end
+        end
     end
-    if order ≤ typemax(Int64)
-        return Int64(order)
-    elseif order ≤ typemax(Int128)
-        return Int128(order)
+    return true
+end
+
+function islangrangian(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
+    if dim == n && isisotropic(S)
+        return true
+    else
+        return false
     end
-    return order
 end
 
 
@@ -474,6 +497,66 @@ end
 ############################################################################################
 
 abstract type AbstractSymplecticMap end
+
+function issymplectic(E::NTuple{n, SymplecticVector{n, T}}, F::NTuple{n, SymplecticVector{n, T}}) where {n, T<:Integer}
+    for i = 1:n
+        for j = (i+1):n
+            if !iszero(E[i] ⋆ E[j]) || !iszero(F[i] ⋆ F[j])
+                return false
+            end
+        end
+    end
+    for i = 1:n
+        for j = 1:n
+            if i == j
+                if iszero(E[i] ⋆ F[j])
+                    return false
+                end
+            else
+                if !iszero(E[i] ⋆ F[j])
+                    return false
+                end
+            end
+        end
+    end
+    return true
+end
+
+struct SymplecticBasis{n, T}
+    E::NTuple{n, SymplecticVector{n, T}}
+    F::NTuple{n, SymplecticVector{n, T}}
+    function SymplecticBasis{n, T}(E::Tuple, F::Tuple) where {n, T<:Integer}
+        @assert issymplectic(E, F)
+        return new(E, F)
+    end
+end
+
+function SymplecticBasis{n, T}(E::Vector, F::Vector) where {n, T<:Integer}
+    @assert length(E) == n && length(F) == n
+    return SymplecticBasis{n, T}(Tuple(E), Tuple(F))
+end
+
+struct SymplecticMap{n, T}
+    E::NTuple{n, SymplecticVector{n, T}}
+    F::NTuple{n, SymplecticVector{n, T}}
+    function SymplecticMap{n, T}(E::Tuple, F::Tuple) where {n, T<:Integer}
+        @assert issymplectic(E, F)
+        return new(E, F)
+    end
+end
+
+function SymplecticMap{n, T}(E::Vector, F::Vector) where {n, T<:Integer}
+    @assert length(E) == n && length(F) == n
+    return SymplecticBasis{n, T}(Tuple(E), Tuple(F))
+end
+
+function SymplecticMap{n, T}(B::SymplecticBasis{n, T}) where {n, T<:Integer}
+    return SymplecticMap(B.E, B.F)
+end
+
+function symplecticmap(A::SymplecticMap{n, T}, b::SymplecticVector{n, T}) where {n, T<:Integer}
+    return reduce(+, vcat([A.E[k] for k=1:n if (b.a >>> (k-1)) & 1 == 1], [A.F[k] for k=1:n if (b.b >>> (k-1)) & 1 == 1]))
+end
 
 
 ############################################################################################
@@ -562,7 +645,13 @@ function transvection(H::Vector, V::Vector)
     return [transvection(H, v) for v in V]
 end
 
-*(h::Transvection{n, T}, v::SymplecticVector{n, T}) where {n, T} = transvection(h, v)
+function transvection(h::Transvection{n, T}, V::NTuple{N, SymplecticVector{n, T}}) where {n, T<:Integer, N}
+    return NTuple{N, SymplecticVector{n, T}}(transvection(h, v) for v in V)
+end
+
+function transvection(H::Vector, V::NTuple{N, SymplecticVector{n, T}}) where {n, T<:Integer, N}
+    return NTuple{N, SymplecticVector{n, T}}(transvection(H, v) for v in V)
+end
 
 
 ## Random transvections
@@ -633,38 +722,31 @@ end
 
 
 ############################################################################################
-## Subspaces                                                                              ##
+## Symplectic group stuff                                                                 ##
 ############################################################################################
 
-struct Subspace{n, dim, T}
-    basis::NTuple{dim, SymplecticVector{n, T}}
-    function Subspace{n, dim, T}(b::NTuple{dim, SymplecticVector{n, T}}) where {n, dim, T<:Integer}
-        return new(b)
+"""
+    symplecticgrouporder(n)
+
+Compute the order of the symplectic group ``Sp(2n,ℤ₂)``.
+"""
+function symplecticgrouporder(n)
+    order = BigInt(2)^(n^2)
+    for k in 1:n
+        order *= BigInt(4)^k - 1
     end
+    if order ≤ typemax(Int64)
+        return Int64(order)
+    elseif order ≤ typemax(Int128)
+        return Int128(order)
+    end
+    return order
 end
 
-function dimension(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
-    return dim
-end
 
-function isisotropic(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
-    for i = 1:dim
-        for j = 1:dim
-            if !iszero(S.basis[i] ⋆ S.basis[j])
-                return false
-            end
-        end
-    end
-    return true
-end
-
-function isLangrangian(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
-    if dim == n && isisotropic(S)
-        return true
-    else
-        return false
-    end
-end
+############################################################################################
+## SYMPLECTICImproved algorithm                                                           ##
+############################################################################################
 
 """
     SYMPLECTICImproved(n, i)
@@ -680,12 +762,14 @@ function SYMPLECTICImproved(n, i)
     
     T = findtransvection(SymplecticVector{n, type}(one(type),zero(type)), f₁)
 
-    b = swapbits(BigInt(floor(i / s)) << 1, 0, 1) & (big(1) << 2n - 1)
+    b = swapbits(div(i, s) << 1, 0, 1) & (big(1) << 2n - 1)
+    flag = b & 1
+    b |= 1
 
-    e = SymplecticVector{n, type}(reverse(deinterleavebits(b))...)
+    e = SymplecticVector{n, type}(deinterleavebits(b)...)
     h₀ = transvection(T, e)
 
-    if b & 1 == 1
+    if flag & 1 == 1
         T¹ = [Transvection{n}(h₀)]
     else
         T¹ = [Transvection{n}(h₀), Transvection{n}(f₁)]
@@ -693,15 +777,14 @@ function SYMPLECTICImproved(n, i)
     f₂ = transvection([T, T¹...], SymplecticVector{n, type}(zero(type),one(type)))
 
     if n == 1
-        return [f₁, f₂]
+        return SymplecticBasis{n, type}((f₁,), (f₂,))
     else
-        return transvection([T, T¹...],
-                [
-                    [lift(u, 1) for u in SYMPLECTICImproved(n-1, BigInt(floor(i / s)) >> (2n-1))]...,
-                    SymplecticVector{n, type}(one(type) << (n-1), 0),
-                    SymplecticVector{n, type}(0, one(type) << (n-1))
-                ]
-            )
+        B₍ₙ₋₁₎ = SYMPLECTICImproved(n-1, BigInt(floor(i / s)) >> (2n-1))
+        Bₙ = SymplecticBasis{n, type}(
+            transvection([T, T¹...], pushfirst!([liftright(u, 1) for u in B₍ₙ₋₁₎.E], SymplecticVector{n, type}(one(type), zero(type)))),
+            transvection([T, T¹...], pushfirst!([liftright(u, 1) for u in B₍ₙ₋₁₎.F], SymplecticVector{n, type}(zero(type), one(type))))
+        )
+        return Bₙ
     end
 end
 

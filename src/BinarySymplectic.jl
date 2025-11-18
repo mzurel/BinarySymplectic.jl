@@ -448,11 +448,7 @@ function isisotropic(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
 end
 
 function islangrangian(S::Subspace{n, dim, T}) where {n, dim, T<:Integer}
-    if dim == n && isisotropic(S)
-        return true
-    else
-        return false
-    end
+    return dim == n && isisotropic(S)
 end
 
 
